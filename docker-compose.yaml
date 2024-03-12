@@ -1,0 +1,87 @@
+version: '3'
+
+services:
+  postgres:
+    image: postgres:latest
+    ports:
+      - "5432:5432"
+    networks:
+      - streaming_network
+    environment:
+      - POSTGRES_DB: airflow
+      - POSTGRES_USER: airflow
+      - POSTGRES_PASSWORD: airflow
+
+  init-airflow:
+    image: apache/airflow:latest
+    depends_on:
+      - postgres
+    networks:
+      - streaming_network
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+    command: >
+      bash -c "airflow db init &&
+               airflow users create --username airflow --password password --firstname John --lastname Doe --role Admin --email admin@example.com"
+
+  webserver:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    user: root
+    depends_on:
+      - postgres
+    networks:
+      - streaming_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+      - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+    environments:
+      - LOAD_EX=n
+      - EXECUTOR=Local
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=''
+      - AIRFLOW__WEBSERVER_DEFAULT_USER_USERNAME=airflow
+      - AIRFLOW__WEBSERVER_DEFAULT_USER_PASSWORD=airflow
+      - AIRFLOW_WWW_USER_USERNAME=airflow
+      - AIRFLOW_WWW_USER_PASSWORD=airflow
+      - AIRFLOW__WEBSERVER_SECRET_KEY=secret
+    ports:
+      -"8080:8080"
+    command: webserver
+  
+  scheduler:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    user: root
+    depends_on:
+      - postgres
+    networks:
+      - streaming_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+      - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+    environments:
+      - LOAD_EX=n
+      - EXECUTOR=Local
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=''
+      - AIRFLOW__WEBSERVER_DEFAULT_USER_USERNAME=airflow
+      - AIRFLOW__WEBSERVER_DEFAULT_USER_PASSWORD=airflow
+      - AIRFLOW_WWW_USER_USERNAME=airflow
+      - AIRFLOW_WWW_USER_PASSWORD=airflow
+      - AIRFLOW__WEBSERVER_SECRET_KEY=secret
+    ports:
+      -"8080:8080"
+    command: webserver
+
+networks:
+  streaming_network:
+    driver: bridge
